@@ -1,0 +1,32 @@
+{
+    "bookings": [
+        {
+            "id": "1",
+            "date": "2025-03-05",
+            "start_time": "10:00",
+            "end_time": "11:00",
+            "room_id": "1",
+            "attendees": ["1", "2"]
+        }
+    ],
+    "rooms": [
+        {
+            "room_id": "1",
+            "room_name": "Conference Room A"
+        },
+        {
+            "room_id": "2",
+            "room_name": "Conference Room B"
+        }
+    ],
+    "staff": [
+        {
+            "staff_id": "1",
+            "full_name": "Alice Johnson"
+        },
+        {
+            "staff_id": "2",
+            "full_name": "Bob Smith"
+        }
+    ]
+}

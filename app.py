@@ -3,7 +3,7 @@ import os
 
 import aws_cdk as cdk
 
-from aws_lex_chatbot.aws_lex_chatbot_stack import AwsLexChatbotStack
+from cdk.aws_lex_chatbot_stack import AwsLexChatbotStack
 
 
 app = cdk.App()
