@@ -1,6 +1,7 @@
 import json
 import boto3
 import uuid
+import difflib
 from datetime import datetime, timedelta
 from fuzzywuzzy import process
 
@@ -61,8 +62,9 @@ def lambda_handler(event, context):
 
     corrected_attendees = []
     for name in attendees:
-        best_match, score = process.extractOne(name, staff_names.keys())
-        if score > 80:
+        matches = difflib.get_close_matches(name, staff_names.keys(), n=1, cutoff=0.8)
+        if matches:
+            best_match = matches[0]
             corrected_attendees.append(staff_names[best_match])
         else:
             return {
