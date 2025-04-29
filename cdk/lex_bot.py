@@ -37,6 +37,14 @@ def create_lex_bot(scope: Construct, lex_role: iam.Role, unified_lambda_arn: str
                             priority=3,
                             slot_name="Duration"
                         ),
+                        lex.CfnBot.SlotPriorityProperty(
+                            priority=4,
+                            slot_name="Room"
+                        ),
+                        lex.CfnBot.SlotPriorityProperty(
+                            priority=5,
+                            slot_name="Attendees"
+                        ),
                     ],
                     slots=[
                         lex.CfnBot.SlotProperty(
@@ -88,6 +96,44 @@ def create_lex_bot(scope: Construct, lex_role: iam.Role, unified_lambda_arn: str
                                             message=lex.CfnBot.MessageProperty(
                                                 plain_text_message=lex.CfnBot.PlainTextMessageProperty(
                                                     value="How long will the meeting last (in minutes)?"
+                                                )
+                                            )
+                                        )
+                                    ],
+                                    max_retries=2
+                                )
+                            )
+                        ),
+                        lex.CfnBot.SlotProperty(
+                            name="Room",
+                            slot_type_name="AMAZON.AlphaNumeric",
+                            value_elicitation_setting=lex.CfnBot.SlotValueElicitationSettingProperty(
+                                slot_constraint="Required",
+                                prompt_specification=lex.CfnBot.PromptSpecificationProperty(
+                                    message_groups_list=[
+                                        lex.CfnBot.MessageGroupProperty(
+                                            message=lex.CfnBot.MessageProperty(
+                                                plain_text_message=lex.CfnBot.PlainTextMessageProperty(
+                                                    value="Which room should I book for the meeting?"
+                                                )
+                                            )
+                                        )
+                                    ],
+                                    max_retries=2
+                                )
+                            )
+                        ),
+                        lex.CfnBot.SlotProperty(
+                            name="Attendees",
+                            slot_type_name="AMAZON.FirstName", 
+                            value_elicitation_setting=lex.CfnBot.SlotValueElicitationSettingProperty(
+                                slot_constraint="Required",
+                                prompt_specification=lex.CfnBot.PromptSpecificationProperty(
+                                    message_groups_list=[
+                                        lex.CfnBot.MessageGroupProperty(
+                                            message=lex.CfnBot.MessageProperty(
+                                                plain_text_message=lex.CfnBot.PlainTextMessageProperty(
+                                                    value="Who will be attending the meeting? You can list multiple names separated by commas."
                                                 )
                                             )
                                         )

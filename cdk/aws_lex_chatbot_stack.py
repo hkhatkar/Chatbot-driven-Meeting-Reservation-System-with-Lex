@@ -11,7 +11,8 @@ from aws_cdk import (
     CfnOutput,
     App,
     Environment,
-    Fn
+    Fn,
+    custom_resources as cr
 )
 from .lex_bot import create_lex_bot
 from constructs import Construct
@@ -64,6 +65,10 @@ class AwsLexChatbotStack(Stack):
         bookings_table.grant_read_write_data(unified_lambda)
         rooms_table.grant_read_write_data(unified_lambda)
         staff_table.grant_read_write_data(unified_lambda)
+
+
+
+
 
         # Define the Lex Bot with a single Lambda function for all intents
         lex_bot = create_lex_bot(self, lex_role, unified_lambda_arn=unified_lambda.function_arn)
@@ -120,6 +125,24 @@ class AwsLexChatbotStack(Stack):
         bookings_table.grant_read_write_data(init_lambda)
         rooms_table.grant_read_write_data(init_lambda)
         staff_table.grant_read_write_data(init_lambda)
+
+        init_trigger = cr.AwsCustomResource(self, "InitDatabaseTrigger",
+            on_create=cr.AwsSdkCall(
+                service="Lambda",
+                action="invoke",
+                parameters={
+                    "FunctionName": init_lambda.function_name,
+                    "InvocationType": "Event"
+                },
+                physical_resource_id=cr.PhysicalResourceId.of("InitDatabaseRun")
+            ),
+            policy=cr.AwsCustomResourcePolicy.from_statements([
+                iam.PolicyStatement(
+                    actions=["lambda:InvokeFunction"],
+                    resources=[init_lambda.function_arn]
+                )
+            ])
+        )
 
         # API Gateway for meeting bookings
         booking_api = apigateway.LambdaRestApi(self, "BookingAPI",

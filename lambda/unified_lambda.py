@@ -2,8 +2,8 @@ import json
 import boto3
 import uuid
 import random
+import difflib
 from datetime import datetime, timedelta
-from fuzzywuzzy import process
 
 dynamodb = boto3.resource("dynamodb")
 bookings_table = dynamodb.Table("Bookings")
@@ -38,8 +38,9 @@ def book_meeting(date, start_time, duration, room_id, attendees):
     staff_names = {s["full_name"]: s["staff_id"] for s in staff_db}
     corrected_attendees = []
     for name in attendees:
-        best_match, score = process.extractOne(name, staff_names.keys())
-        if score > 80:
+        matches = difflib.get_close_matches(name, staff_names.keys(), n=1, cutoff=0.8)
+        if matches:
+            best_match = matches[0]
             corrected_attendees.append(staff_names[best_match])
         else:
             return f"Staff {name} not found."
@@ -66,23 +67,54 @@ def fallback_response():
     return random.choice(responses)
 
 def lambda_handler(event, context):
-    intent_name = event["currentIntent"]["name"]
-    request = event["currentIntent"]["slots"]
+    intent_name = event["sessionState"]["intent"]["name"]
+    slots = event["sessionState"]["intent"]["slots"]
     
     if intent_name == "CheckAvailability":
-        date, start_time, room_id = request["Date"], request["StartTime"], request["Room"]
+        date = slots.get("MeetingDate", {}).get("value", {}).get("interpretedValue")
+        start_time = slots.get("MeetingTime", {}).get("value", {}).get("interpretedValue")
+        room_id = slots.get("Room", {}).get("value", {}).get("interpretedValue")
         available = check_availability(date, start_time, room_id)
         message = f"Room {room_id} is available at {start_time}." if available else "Room not available at the requested time."
+        fulfillment_state = "Fulfilled"
+        
     elif intent_name == "BookMeeting":
-        date, start_time, duration, room_id, attendees = request["Date"], request["StartTime"], int(request["Duration"]), request["Room"], request["Attendees"]
-        message = book_meeting(date, start_time, duration, room_id, attendees)
+        date = slots.get("MeetingDate", {}).get("value", {}).get("interpretedValue")
+        start_time = slots.get("MeetingTime", {}).get("value", {}).get("interpretedValue")
+        duration = slots.get("Duration", {}).get("value", {}).get("interpretedValue")
+        room_id = slots.get("Room", {}).get("value", {}).get("interpretedValue")
+        attendees_raw = slots.get("Attendees", {}).get("value", {}).get("interpretedValue")
+
+        attendees = [att.strip() for att in attendees_raw.split(",")] if attendees_raw else []
+
+        if date and start_time and duration and room_id and attendees:
+            message = book_meeting(date, start_time, int(duration), room_id, attendees)
+            fulfillment_state = "Fulfilled" if "confirmed" in message else "Failed"
+        else:
+            message = "Missing information for booking."
+            fulfillment_state = "Failed"
+
     else:
         message = fallback_response()
+        fulfillment_state = "Failed"
     
     return {
-        "dialogAction": {
-            "type": "Close",
-            "fulfillmentState": "Fulfilled" if "confirmed" in message else "Failed",
-            "message": {"contentType": "PlainText", "content": message}
-        }
+        "sessionState": {
+            "dialogAction": {
+                "type": "Close"
+            },
+            "intent": {
+                "name": intent_name,
+                "state": fulfillment_state,
+                "confirmationState": "Confirmed" if fulfillment_state == "Fulfilled" else "None"
+            }
+        },
+        "messages": [
+            {
+                "contentType": "PlainText",
+                "content": message
+            }
+        ],
+        "sessionId": event.get("sessionId"),
+        "requestAttributes": event.get("requestAttributes", {})
     }
