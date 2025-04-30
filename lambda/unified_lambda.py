@@ -6,31 +6,51 @@ import difflib
 from datetime import datetime, timedelta
 
 dynamodb = boto3.resource("dynamodb")
-bookings_table = dynamodb.Table("Bookings")
+bookings_table = dynamodb.Table("BOOKINGS_TABLE")
 staff_table = dynamodb.Table("Staff")
 
 def check_availability(date, start_time, room_id):
     end_time = (datetime.strptime(start_time, "%H:%M") + timedelta(minutes=30)).strftime("%H:%M")
     overlapping = bookings_table.scan(
-        FilterExpression="room_id = :room AND date = :date AND ((start_time BETWEEN :start AND :end) OR (end_time BETWEEN :start AND :end))",
-        ExpressionAttributeValues={":room": room_id, ":date": date, ":start": start_time, ":end": end_time},
+        FilterExpression="room_id = :room AND #d = :date AND ((start_time BETWEEN :start AND :end) OR (end_time BETWEEN :start AND :end))",
+        ExpressionAttributeNames={"#d": "date"},
+        ExpressionAttributeValues={
+            ":room": room_id,
+            ":date": date,
+            ":start": start_time,
+            ":end": end_time
+        }
     )["Items"]
     return not overlapping
 
 def book_meeting(date, start_time, duration, room_id, attendees):
     end_time = (datetime.strptime(start_time, "%H:%M") + timedelta(minutes=duration)).strftime("%H:%M")
     overlapping = bookings_table.scan(
-        FilterExpression="room_id = :room AND date = :date AND ((start_time BETWEEN :start AND :end) OR (end_time BETWEEN :start AND :end))",
-        ExpressionAttributeValues={":room": room_id, ":date": date, ":start": start_time, ":end": end_time},
+        FilterExpression="room_id = :room AND #d = :date AND ((start_time BETWEEN :start AND :end) OR (end_time BETWEEN :start AND :end))",
+        ExpressionAttributeNames={"#d": "date"},
+        ExpressionAttributeValues={
+            ":room": room_id,
+            ":date": date,
+            ":start": start_time,
+            ":end": end_time
+        }
     )["Items"]
+
     if overlapping:
         return "Room already booked. Suggest another slot."
     
     for staff in attendees:
         booked_meetings = bookings_table.scan(
-            FilterExpression="contains(attendees, :staff) AND date = :date AND ((start_time BETWEEN :start AND :end) OR (end_time BETWEEN :start AND :end))",
-            ExpressionAttributeValues={":staff": staff, ":date": date, ":start": start_time, ":end": end_time},
+            FilterExpression="contains(attendees, :staff) AND #d = :date AND ((start_time BETWEEN :start AND :end) OR (end_time BETWEEN :start AND :end))",
+            ExpressionAttributeNames={"#d": "date"},
+            ExpressionAttributeValues={
+                ":staff": staff,
+                ":date": date,
+                ":start": start_time,
+                ":end": end_time
+            },
         )["Items"]
+
         if booked_meetings:
             return f"Staff member {staff} is already booked."
     
@@ -38,7 +58,7 @@ def book_meeting(date, start_time, duration, room_id, attendees):
     staff_names = {s["full_name"]: s["staff_id"] for s in staff_db}
     corrected_attendees = []
     for name in attendees:
-        matches = difflib.get_close_matches(name, staff_names.keys(), n=1, cutoff=0.8)
+        matches = difflib.get_close_matches(name, staff_names.keys(), n=1, cutoff=0.5)
         if matches:
             best_match = matches[0]
             corrected_attendees.append(staff_names[best_match])
@@ -46,6 +66,7 @@ def book_meeting(date, start_time, duration, room_id, attendees):
             return f"Staff {name} not found."
     
     booking_id = str(uuid.uuid4())
+    
     bookings_table.put_item(
         Item={
             "id": booking_id,
@@ -56,6 +77,7 @@ def book_meeting(date, start_time, duration, room_id, attendees):
             "attendees": corrected_attendees,
         }
     )
+
     return f"Booking confirmed for room {room_id} at {start_time} with attendees: {', '.join(corrected_attendees)}."
 
 def fallback_response():
