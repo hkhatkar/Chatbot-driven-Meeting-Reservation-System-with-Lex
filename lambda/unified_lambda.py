@@ -4,10 +4,11 @@ import uuid
 import random
 import difflib
 from datetime import datetime, timedelta
+import os
 
 dynamodb = boto3.resource("dynamodb")
-bookings_table = dynamodb.Table("BOOKINGS_TABLE")
-staff_table = dynamodb.Table("Staff")
+bookings_table = dynamodb.Table(os.environ["BOOKINGS_TABLE"])
+staff_table = dynamodb.Table(os.environ["STAFF_TABLE"])
 
 def check_availability(date, start_time, room_id):
     end_time = (datetime.strptime(start_time, "%H:%M") + timedelta(minutes=30)).strftime("%H:%M")
