@@ -44,6 +44,17 @@ class AwsLexChatbotStack(Stack):
             managed_policies=[iam.ManagedPolicy.from_aws_managed_policy_name("AmazonLexFullAccess")]
         )
 
+        # Add specific permissions for Lex role to access DynamoDB
+        lex_role.add_to_policy(iam.PolicyStatement(
+            actions=["dynamodb:Scan", "dynamodb:PutItem"],
+            resources=[
+                bookings_table.table_arn,
+                rooms_table.table_arn,
+                staff_table.table_arn
+            ]
+        ))
+
+
         # Unified Lambda function for all Lex intents
         unified_lambda = _lambda.Function(self, "UnifiedLambda",
             runtime=_lambda.Runtime.PYTHON_3_9,
