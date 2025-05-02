@@ -8,25 +8,25 @@ import os
 
 dynamodb = boto3.resource("dynamodb")
 bookings_table = dynamodb.Table(os.environ["BOOKINGS_TABLE"])
+rooms_table    = dynamodb.Table(os.environ["ROOMS_TABLE"])
 staff_table = dynamodb.Table(os.environ["STAFF_TABLE"])
 
-def check_availability(date, start_time, room_id):
-    end_time = (datetime.strptime(start_time, "%H:%M") + timedelta(minutes=30)).strftime("%H:%M")
-    overlapping = bookings_table.scan(
-        FilterExpression="room_id = :room AND #d = :date AND ((start_time BETWEEN :start AND :end) OR (end_time BETWEEN :start AND :end))",
-        ExpressionAttributeNames={"#d": "date"},
-        ExpressionAttributeValues={
-            ":room": room_id,
-            ":date": date,
-            ":start": start_time,
-            ":end": end_time
-        }
-    )["Items"]
-    return not overlapping
+def resolve_room(raw_room_name):
+    # 1) Scan all rooms
+    rooms = rooms_table.scan()["Items"]
+    # 2) Build name -> id map
+    name_to_id = { r["room_name"].lower(): r["room_id"] for r in rooms }
+    # 3) Fuzzy-match user input
+    matches = difflib.get_close_matches(raw_room_name.lower(), name_to_id.keys(), n=1, cutoff=0.6)
+    if not matches:
+        raise ValueError(f"Room '{raw_room_name}' not found.")
+    return name_to_id[matches[0]]
 
-def book_meeting(date, start_time, duration, room_id, attendees):
+
+
+def check_availability(room_id, date, start_time, duration=30):
     end_time = (datetime.strptime(start_time, "%H:%M") + timedelta(minutes=duration)).strftime("%H:%M")
-    overlapping = bookings_table.scan(
+    return not bookings_table.scan(
         FilterExpression="room_id = :room AND #d = :date AND ((start_time BETWEEN :start AND :end) OR (end_time BETWEEN :start AND :end))",
         ExpressionAttributeNames={"#d": "date"},
         ExpressionAttributeValues={
@@ -37,49 +37,53 @@ def book_meeting(date, start_time, duration, room_id, attendees):
         }
     )["Items"]
 
-    if overlapping:
+def book_meeting(raw_room, date, start_time, duration, attendees):
+    # Resolve to actual room_id
+    room_id = resolve_room(raw_room)
+
+    # Check room availability
+    if not check_availability(room_id, date, start_time, duration):
         return "Room already booked. Suggest another slot."
-    
-    for staff in attendees:
-        booked_meetings = bookings_table.scan(
+
+    end_time = (datetime.strptime(start_time, "%H:%M") + timedelta(minutes=duration)).strftime("%H:%M")
+
+    # Check each attendee’s availability
+    for staff_id in attendees:
+        if bookings_table.scan(
             FilterExpression="contains(attendees, :staff) AND #d = :date AND ((start_time BETWEEN :start AND :end) OR (end_time BETWEEN :start AND :end))",
             ExpressionAttributeNames={"#d": "date"},
             ExpressionAttributeValues={
-                ":staff": staff,
+                ":staff": staff_id,
                 ":date": date,
                 ":start": start_time,
                 ":end": end_time
-            },
-        )["Items"]
+            }
+        )["Items"]:
+            return f"Staff member {staff_id} is already booked."
 
-        if booked_meetings:
-            return f"Staff member {staff} is already booked."
-    
+    # Convert staff names -> IDs
     staff_db = staff_table.scan()["Items"]
-    staff_names = {s["full_name"]: s["staff_id"] for s in staff_db}
-    corrected_attendees = []
+    name_to_id = { s["full_name"].lower(): s["staff_id"] for s in staff_db }
+    corrected = []
     for name in attendees:
-        matches = difflib.get_close_matches(name, staff_names.keys(), n=1, cutoff=0.5)
-        if matches:
-            best_match = matches[0]
-            corrected_attendees.append(staff_names[best_match])
-        else:
+        match = difflib.get_close_matches(name.lower(), name_to_id.keys(), n=1, cutoff=0.5)
+        if not match:
             return f"Staff {name} not found."
-    
-    booking_id = str(uuid.uuid4())
-    
-    bookings_table.put_item(
-        Item={
-            "id": booking_id,
-            "date": date,
-            "start_time": start_time,
-            "end_time": end_time,
-            "room_id": room_id,
-            "attendees": corrected_attendees,
-        }
-    )
+        corrected.append(name_to_id[match[0]])
 
-    return f"Booking confirmed for room {room_id} at {start_time} with attendees: {', '.join(corrected_attendees)}."
+    # write the booking
+    booking_id = str(uuid.uuid4())
+    bookings_table.put_item(Item={
+        "id": booking_id,
+        "room_id": room_id,
+        "date": date,
+        "start_time": start_time,
+        "end_time": end_time,
+        "attendees": corrected
+    })
+
+    return f"Booking confirmed for room {room_id} at {start_time} with attendees: {', '.join(corrected)}."
+
 
 def fallback_response():
     responses = [
@@ -90,54 +94,37 @@ def fallback_response():
     return random.choice(responses)
 
 def lambda_handler(event, context):
-    intent_name = event["sessionState"]["intent"]["name"]
+    intent = event["sessionState"]["intent"]["name"]
     slots = event["sessionState"]["intent"]["slots"]
     
-    if intent_name == "CheckAvailability":
-        date = slots.get("MeetingDate", {}).get("value", {}).get("interpretedValue")
-        start_time = slots.get("MeetingTime", {}).get("value", {}).get("interpretedValue")
-        room_id = slots.get("Room", {}).get("value", {}).get("interpretedValue")
-        available = check_availability(date, start_time, room_id)
-        message = f"Room {room_id} is available at {start_time}." if available else "Room not available at the requested time."
-        fulfillment_state = "Fulfilled"
+    #if intent_name == "CheckAvailability":
+    #    date = slots.get("MeetingDate", {}).get("value", {}).get("interpretedValue")
+    #    start_time = slots.get("MeetingTime", {}).get("value", {}).get("interpretedValue")
+    #    room_id = slots.get("Room", {}).get("value", {}).get("interpretedValue")
+    #    available = check_availability(date, start_time, room_id)
+    #    message = f"Room {room_id} is available at {start_time}." if available else "Room not available at the requested time."
+    #    fulfillment_state = "Fulfilled"
         
-    elif intent_name == "BookMeeting":
-        date = slots.get("MeetingDate", {}).get("value", {}).get("interpretedValue")
-        start_time = slots.get("MeetingTime", {}).get("value", {}).get("interpretedValue")
-        duration = slots.get("Duration", {}).get("value", {}).get("interpretedValue")
-        room_id = slots.get("Room", {}).get("value", {}).get("interpretedValue")
-        attendees_raw = slots.get("Attendees", {}).get("value", {}).get("interpretedValue")
+    if intent == "BookMeeting":
+        raw_room    = slots["Room"]["value"]["interpretedValue"]
+        date        = slots["MeetingDate"]["value"]["interpretedValue"]
+        start_time  = slots["MeetingTime"]["value"]["interpretedValue"]
+        duration    = int(slots["Duration"]["value"]["interpretedValue"])
+        attendees_r = slots["Attendees"]["value"]["interpretedValue"]
+        attendees   = [a.strip() for a in attendees_r.split(",")]
 
-        attendees = [att.strip() for att in attendees_raw.split(",")] if attendees_raw else []
+        message = book_meeting(raw_room, date, start_time, duration, attendees)
+        state   = "Fulfilled" if "confirmed" in message else "Failed"
 
-        if date and start_time and duration and room_id and attendees:
-            message = book_meeting(date, start_time, int(duration), room_id, attendees)
-            fulfillment_state = "Fulfilled" if "confirmed" in message else "Failed"
-        else:
-            message = "Missing information for booking."
-            fulfillment_state = "Failed"
 
-    else:
-        message = fallback_response()
-        fulfillment_state = "Failed"
-    
     return {
         "sessionState": {
-            "dialogAction": {
-                "type": "Close"
-            },
+            "dialogAction": {"type": "Close"},
             "intent": {
-                "name": intent_name,
-                "state": fulfillment_state,
-                "confirmationState": "Confirmed" if fulfillment_state == "Fulfilled" else "None"
+                "name": intent,
+                "state": state,
+                "confirmationState": "Confirmed" if state == "Fulfilled" else "None"
             }
         },
-        "messages": [
-            {
-                "contentType": "PlainText",
-                "content": message
-            }
-        ],
-        "sessionId": event.get("sessionId"),
-        "requestAttributes": event.get("requestAttributes", {})
+        "messages": [{"contentType": "PlainText", "content": message}]
     }
