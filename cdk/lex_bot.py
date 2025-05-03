@@ -155,14 +155,9 @@ def create_lex_bot(scope: Construct, lex_role: iam.Role, unified_lambda_arn: str
                         lex.CfnBot.SampleUtteranceProperty(utterance="Check availability for a meeting tomorrow"),
                     ],
                     slot_priorities=[  # Add slot priorities here
-                        lex.CfnBot.SlotPriorityProperty(
-                            priority=1,
-                            slot_name="CheckDate"
-                        ),
-                        lex.CfnBot.SlotPriorityProperty(
-                            priority=2,
-                            slot_name="CheckTime"
-                        ),
+                        lex.CfnBot.SlotPriorityProperty(priority=1, slot_name="Room"),
+                        lex.CfnBot.SlotPriorityProperty(priority=2, slot_name="CheckDate"),
+                        lex.CfnBot.SlotPriorityProperty(priority=3, slot_name="CheckTime"),
                     ],
                     slots=[
                         lex.CfnBot.SlotProperty(
@@ -195,6 +190,25 @@ def create_lex_bot(scope: Construct, lex_role: iam.Role, unified_lambda_arn: str
                                             message=lex.CfnBot.MessageProperty(
                                                 plain_text_message=lex.CfnBot.PlainTextMessageProperty(
                                                     value="What time should I check for availability?"
+                                                )
+                                            )
+                                        )
+                                    ],
+                                    max_retries=2
+                                )
+                            )
+                        ),
+                        lex.CfnBot.SlotProperty(
+                            name="Room",
+                            slot_type_name="AMAZON.AlphaNumeric",
+                            value_elicitation_setting=lex.CfnBot.SlotValueElicitationSettingProperty(
+                                slot_constraint="Required",
+                                prompt_specification=lex.CfnBot.PromptSpecificationProperty(
+                                    message_groups_list=[
+                                        lex.CfnBot.MessageGroupProperty(
+                                            message=lex.CfnBot.MessageProperty(
+                                                plain_text_message=lex.CfnBot.PlainTextMessageProperty(
+                                                    value="Which room would you like to check?"
                                                 )
                                             )
                                         )
