@@ -12,7 +12,9 @@ from aws_cdk import (
     App,
     Environment,
     Fn,
-    custom_resources as cr
+    custom_resources as cr,
+    CfnOutput,
+    aws_s3_deployment as s3_deployment
 )
 from .lex_bot import create_lex_bot
 from constructs import Construct
@@ -106,6 +108,7 @@ class AwsLexChatbotStack(Stack):
 
 
         # S3 Bucket for frontend
+        # 1. Create the S3 bucket
         website_bucket = s3.Bucket(self, "WebsiteBucket",
             website_index_document="index.html",
             website_error_document="error.html",
@@ -114,10 +117,16 @@ class AwsLexChatbotStack(Stack):
         )
 
         # CloudFront Distribution for the frontend
-        cloudfront.Distribution(self, "ChatbotFrontendCDN",
+        # 2. Create the CloudFront distribution pointing to the S3 bucket
+        cloudfront_dist = cloudfront.Distribution(self, "ChatbotFrontendCDN",
             default_behavior=cloudfront.BehaviorOptions(
                 origin=origins.S3Origin(website_bucket)
             )
+        )
+        # 3. Deploy the contents of your built React app to the S3 bucket
+        s3_deployment.BucketDeployment(self, "DeployFrontend",
+            sources=[s3_deployment.Source.asset("frontend/react-app/dist")],
+            destination_bucket=website_bucket
         )
 
         # Lambda function to initialize the database
@@ -161,8 +170,13 @@ class AwsLexChatbotStack(Stack):
             proxy=False
         )
 
+        # For adding bookings via chatbot
         booking_resource = booking_api.root.add_resource("book")
         booking_resource.add_method("POST")
+        
+        # GET list of /bookings in the frontend
+        bookings_list = booking_api.root.add_resource("bookings")
+        bookings_list.add_method("GET")  # uses unified_lambda by default
 
         # API Gateway for checking availability
         availability_api = apigateway.LambdaRestApi(self, "AvailabilityAPI",
@@ -174,11 +188,19 @@ class AwsLexChatbotStack(Stack):
         availability_resource.add_method("GET")
 
         # Output API Gateway URLs
-        CfnOutput(self, "BookingAPIGatewayURL", value=booking_api.url)
-        CfnOutput(self, "AvailabilityAPIGatewayURL", value=availability_api.url)
+      #  CfnOutput(self, "BookingAPIGatewayURL", value=booking_api.url)
+      #  CfnOutput(self, "AvailabilityAPIGatewayURL", value=availability_api.url)
 
         # Output Lex Bot ARN
-        CfnOutput(self, "LexBotARN", value=lex_bot.attr_arn)
+      #  CfnOutput(self, "LexBotARN", value=lex_bot.attr_arn)
+
+        CfnOutput(self, "WebsiteURL", value=f"https://{cloudfront_dist.domain_name}")
+
+
+        CfnOutput(self, "REACT_APP_BOOKING_API", value=booking_api.url)
+        CfnOutput(self, "REACT_APP_AVAILABILITY_API", value=availability_api.url)
+        CfnOutput(self, "REACT_APP_LEX_BOT_ARN", value=lex_bot.attr_arn)
+ 
 
 # Define the app and stack
 app = App()

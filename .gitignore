@@ -44,3 +44,6 @@ pip-delete-this-directory.txt
 # Environment variables (if you use them)
 .env
 *.env
+
+# Generated file with cloud formation urls for frontend
+cdk-outputs.json
