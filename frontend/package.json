@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "@aws-amplify/interactions": "^6.1.21",
+    "aws-amplify": "^6.14.4"
+  }
+}

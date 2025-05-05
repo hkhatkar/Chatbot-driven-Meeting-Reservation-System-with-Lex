@@ -102,9 +102,21 @@ def fallback_response():
 
 
 def lambda_handler(event, context):
+
+    #Scans for bookings list
+    # if called via API Gateway GET /bookings
+    if event.get("requestContext", {}).get("http", {}).get("method") == "GET" \
+       and event["rawPath"].endswith("/bookings"):
+        items = bookings_table.scan()["Items"]
+        return {
+            "statusCode": 200,
+            "headers": {"Access-Control-Allow-Origin": "*"},
+            "body": json.dumps(items)
+        }
+
+    # Intents from chatbot
     intent = event["sessionState"]["intent"]["name"]
     slots  = event["sessionState"]["intent"]["slots"]
-
     try:
         if intent == "CheckAvailability":
             raw_room   = slots["Room"]["value"]["interpretedValue"]
