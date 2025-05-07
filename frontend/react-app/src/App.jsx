@@ -1,45 +1,58 @@
 // frontend/react-app/src/App.jsx
-import React, { useState, useEffect } from "react";
-import { Amplify } from "aws-amplify";
-import awsExports from "./aws-exports";
-import { Interactions } from "@aws-amplify/interactions";
+import React, { useState, useEffect } from "react"
+import { Amplify} from "aws-amplify"
+import { Interactions } from "@aws-amplify/interactions"
+import awsConfig from "./aws-exports"
 
-Amplify.configure(awsExports);
+Amplify.configure({
+  Auth: { region: awsConfig.lexBotRegion },
+  Interactions: {
+    bots: {
+      [awsConfig.lexBotName]: {
+        name: awsConfig.lexBotName,
+        aliasId: "$LATEST",
+        region: awsConfig.lexBotRegion
+      }
+    }
+  }
+})
 
 export default function App() {
   // Bookings
-  const [bookings, setBookings] = useState([]);
+  const [bookings, setBookings] = useState([])
   useEffect(() => {
-    fetchBookings();
-    const iv = setInterval(fetchBookings, 30000);
-    return () => clearInterval(iv);
-  }, []);
+    fetchBookings()
+    const iv = setInterval(fetchBookings, 30000)
+    return () => clearInterval(iv)
+  }, [])
+
   async function fetchBookings() {
     try {
-      const res = await fetch(`${awsExports.API.endpoints[0].endpoint}/bookings`);
-      if (!res.ok) throw new Error(res.statusText);
-      setBookings(await res.json());
+      const res = await fetch(awsConfig.bookingApiUrl)
+      if (!res.ok) throw new Error(res.statusText)
+      setBookings(await res.json())
     } catch (e) {
-      console.error("Failed to load bookings:", e);
+      console.error("Failed to load bookings:", e)
     }
   }
 
   // Chat
   const [chatLogs, setChatLogs] = useState([
     { from: "bot", text: "Hello! Ask me to book or check a room." }
-  ]);
-  const [chatInput, setChatInput] = useState("");
+  ])
+  const [chatInput, setChatInput] = useState("")
+
   async function sendToBot() {
-    if (!chatInput.trim()) return;
-    setChatLogs(logs => [...logs, { from: "you", text: chatInput }]);
+    if (!chatInput.trim()) return
+    setChatLogs(logs => [...logs, { from: "you", text: chatInput }])
     try {
-      const res = await Interactions.send("MeetingBookingBot", chatInput);
-      setChatLogs(logs => [...logs, { from: "bot", text: res.message }]);
+      const res = await Interactions.send(awsConfig.lexBotName, chatInput)
+      setChatLogs(logs => [...logs, { from: "bot", text: res.message }])
     } catch (err) {
-      console.error(err);
-      setChatLogs(logs => [...logs, { from: "bot", text: "Error talking to bot." }]);
+      console.error(err)
+      setChatLogs(logs => [...logs, { from: "bot", text: "Error talking to bot." }])
     }
-    setChatInput("");
+    setChatInput("")
   }
 
   return (
@@ -50,7 +63,10 @@ export default function App() {
         <table className="min-w-full table-auto">
           <thead>
             <tr>
-              <th>Room</th><th>Date</th><th>Time</th><th>Attendees</th>
+              <th>Room</th>
+              <th>Date</th>
+              <th>Time</th>
+              <th>Attendees</th>
             </tr>
           </thead>
           <tbody>
@@ -73,9 +89,11 @@ export default function App() {
           {chatLogs.map((m,i) => (
             <div
               key={i}
-              className={`p-2 rounded ${m.from==="bot"?"bg-gray-100 self-start":"bg-blue-100 self-end"} max-w-xs`}
+              className={`p-2 rounded ${
+                m.from==="bot" ? "bg-gray-100 self-start" : "bg-blue-100 self-end"
+              } max-w-xs`}
             >
-              <strong>{m.from==="bot"?"Bot":"You"}:</strong> {m.text}
+              <strong>{m.from==="bot" ? "Bot" : "You"}:</strong> {m.text}
             </div>
           ))}
         </div>
@@ -83,8 +101,8 @@ export default function App() {
           <input
             className="flex-1 p-2 border rounded-l"
             value={chatInput}
-            onChange={e=>setChatInput(e.target.value)}
-            onKeyDown={e=>e.key==="Enter"&&sendToBot()}
+            onChange={e => setChatInput(e.target.value)}
+            onKeyDown={e => e.key==="Enter" && sendToBot()}
             placeholder="Type a message…"
           />
           <button
@@ -96,5 +114,5 @@ export default function App() {
         </div>
       </aside>
     </div>
-  );
+  )
 }
