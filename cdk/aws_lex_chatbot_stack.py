@@ -87,11 +87,13 @@ class AwsLexChatbotStack(Stack):
         lex_bot = create_lex_bot(self, lex_role, unified_lambda_arn=unified_lambda.function_arn)
 
 
+
+
         unified_lambda.add_permission("LexInvokeLambda",
             principal=iam.ServicePrincipal("lexv2.amazonaws.com"),  # Lex V2 service principal
             action="lambda:InvokeFunction",
             #source_arn=lex_bot.attr_arn  # Ensure this is the correct Lex Bot ARN
-            source_arn = f"arn:aws:lex:{self.region}:{self.account}:bot-alias/{lex_bot.attr_id}/*"
+            source_arn =f"arn:aws:lex:{self.region}:{self.account}:bot-alias/{lex_bot.attr_id}*"
 
 
 
@@ -200,7 +202,8 @@ class AwsLexChatbotStack(Stack):
         CfnOutput(self, "REACT_APP_BOOKING_API", value=booking_api.url)
         CfnOutput(self, "REACT_APP_AVAILABILITY_API", value=availability_api.url)
         CfnOutput(self, "REACT_APP_LEX_BOT_ARN", value=lex_bot.attr_arn)
- 
+        CfnOutput(self, "REACTAPPLEXBOTNAME", value=lex_bot.name)
+        CfnOutput(self, "REACTAPPLEXBOTREGION", value=self.region)
 
 # Define the app and stack
 app = App()

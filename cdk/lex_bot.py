@@ -245,6 +245,4 @@ def create_lex_bot(scope: Construct, lex_role: iam.Role, unified_lambda_arn: str
             ]
         )
     )
-
-
     return lex_bot
