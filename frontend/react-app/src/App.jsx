@@ -4,18 +4,25 @@ import { Amplify} from "aws-amplify"
 import { Interactions } from "@aws-amplify/interactions"
 import awsConfig from "./aws-exports"
 
-Amplify.configure({
-  Auth: { region: awsConfig.lexBotRegion },
-  Interactions: {
-    bots: {
-      [awsConfig.lexBotName]: {
-        name: awsConfig.lexBotName,
-        aliasId: "$LATEST",
-        region: awsConfig.lexBotRegion
-      }
+console.log("awsConfig name:", awsConfig.lexBotName) // Add this to inspect the config object
+console.log("awsConfig region:", awsConfig.lexBotRegion) // Add this to inspect the config object
+
+Amplify.configure(awsConfig);
+
+// 2️⃣ Then, register your Lex V2 bot
+Interactions.configure({
+  ...awsConfig,
+  bots: {
+    [awsConfig.lexBotName]: {
+      botId:    awsConfig.lexBotId,
+      aliasId:  awsConfig.lexBotAliasId,
+      localeId: awsConfig.lexBotLocaleId,
+      region:   awsConfig.lexBotRegion
     }
   }
-})
+});
+
+
 
 export default function App() {
   // Bookings
@@ -44,6 +51,8 @@ export default function App() {
 
   async function sendToBot() {
     if (!chatInput.trim()) return
+
+    console.log("→ About to send to bot:", awsConfig.lexBotName, `"${chatInput}"`)
     setChatLogs(logs => [...logs, { from: "you", text: chatInput }])
     try {
       const res = await Interactions.send(awsConfig.lexBotName, chatInput)

@@ -24,7 +24,10 @@ export const awsConfig = {
   availabilityApiUrl: "${stackOutputs.REACTAPPAVAILABILITYAPI}",
   lexBotArn:          "${stackOutputs.REACTAPPLEXBOTARN}",
   lexBotName:         "${stackOutputs.REACTAPPLEXBOTNAME}",
-  lexBotRegion:       "${stackOutputs.REACTAPPLEXBOTREGION}"
+  lexBotRegion:       "${stackOutputs.REACTAPPLEXBOTREGION}",
+  lexBotId:           "${stackOutputs.REACTAPPLEXBOTID}",       // new Lex V2 botId
+  lexBotAliasId:      "${stackOutputs.REACTAPPLEXBOTALIASID}", // new Lex V2 aliasId
+  lexBotLocaleId:     "en_US"                                    // default locale
 };
 export default awsConfig;
 `;

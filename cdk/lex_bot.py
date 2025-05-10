@@ -1,6 +1,7 @@
 import aws_cdk as cdk
 from aws_cdk import aws_lex as lex
 from aws_cdk import aws_iam as iam
+from aws_cdk import CfnOutput
 from constructs import Construct
 
 def create_lex_bot(scope: Construct, lex_role: iam.Role, unified_lambda_arn: str) -> lex.CfnBot:
@@ -244,5 +245,47 @@ def create_lex_bot(scope: Construct, lex_role: iam.Role, unified_lambda_arn: str
                 )
             ]
         )
+
     )
+
+
+    bot_version = lex.CfnBotVersion(
+        scope,
+        "LexChatBotVersion",
+        bot_id=lex_bot.ref,
+        bot_version_locale_specification=[
+            lex.CfnBotVersion.BotVersionLocaleSpecificationProperty(
+                locale_id="en_US",
+                bot_version_locale_details=lex.CfnBotVersion.BotVersionLocaleDetailsProperty(
+                    source_bot_version="DRAFT"  # You clone from DRAFT
+                )
+            )
+        ]
+    )
+
+        # Create an explicit alias for Lex V2
+    lex_alias = lex.CfnBotAlias(
+        scope,
+        "LexChatBotAlias",
+        bot_alias_name="Prod",            # or a custom alias name
+        bot_id=lex_bot.ref,            # reference the bot ID
+        bot_version=bot_version.attr_bot_version,                # use draft or a specific version
+        bot_alias_locale_settings=[
+            lex.CfnBotAlias.BotAliasLocaleSettingsItemProperty(
+                locale_id="en_US",
+                bot_alias_locale_setting=lex.CfnBotAlias.BotAliasLocaleSettingsProperty(
+                    enabled=True,
+                    code_hook_specification=lex.CfnBotAlias.CodeHookSpecificationProperty(
+                        lambda_code_hook=lex.CfnBotAlias.LambdaCodeHookProperty(
+                            code_hook_interface_version="1.0",
+                            lambda_arn=unified_lambda_arn
+                        )
+                    )
+                )
+            )
+        ]
+    )
+        # Export outputs for frontend configuration
+    CfnOutput(scope, "REACT_APP_LEX_BOT_ID",       value=lex_bot.ref)
+    CfnOutput(scope, "REACT_APP_LEX_BOT_ALIAS_ID", value=lex_alias.ref)
     return lex_bot
