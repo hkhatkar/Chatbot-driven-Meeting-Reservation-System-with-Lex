@@ -1,30 +1,22 @@
 // frontend/react-app/src/App.jsx
 import React, { useState, useEffect } from "react"
-import { Amplify} from "aws-amplify"
-import { Interactions } from "@aws-amplify/interactions"
-import awsConfig from "./aws-exports"
+//import { Interactions } from '@aws-amplify/interactions'
+import { Interactions } from 'aws-amplify'
+import { useContext } from 'react';
+import { ConfigContext } from './ConfigContext';
 
-console.log("awsConfig name:", awsConfig.lexBotName) // Add this to inspect the config object
-console.log("awsConfig region:", awsConfig.lexBotRegion) // Add this to inspect the config object
-
-Amplify.configure(awsConfig);
-
-// 2️⃣ Then, register your Lex V2 bot
-Interactions.configure({
-  ...awsConfig,
-  bots: {
-    [awsConfig.lexBotName]: {
-      botId:    awsConfig.lexBotId,
-      aliasId:  awsConfig.lexBotAliasId,
-      localeId: awsConfig.lexBotLocaleId,
-      region:   awsConfig.lexBotRegion
-    }
-  }
-});
 
 
 
 export default function App() {
+
+  const awsConfig = useContext(ConfigContext);
+
+  //console.log("awsConfig lexBotId:", awsConfig.lexBotId) // Add this to inspect the config object
+  console.log("awsConfig lexBotAliasId:", awsConfig.lexBotAliasId) // Add this to inspect the config object
+  //console.log("awsConfig lexBotLocaleId:", awsConfig.lexBotLocaleId)
+  console.log("awsConfig lexBotRegion:", awsConfig.lexBotRegion)
+
   // Bookings
   const [bookings, setBookings] = useState([])
   useEffect(() => {
@@ -35,7 +27,7 @@ export default function App() {
 
   async function fetchBookings() {
     try {
-      const res = await fetch(awsConfig.bookingApiUrl)
+      const res = await fetch(awsConfig.bookingApiUrl);
       if (!res.ok) throw new Error(res.statusText)
       setBookings(await res.json())
     } catch (e) {
@@ -52,10 +44,11 @@ export default function App() {
   async function sendToBot() {
     if (!chatInput.trim()) return
 
-    console.log("→ About to send to bot:", awsConfig.lexBotName, `"${chatInput}"`)
+    //console.log("→ About to send to bot:", awsConfig.lexBotName, `"${chatInput}"`)
     setChatLogs(logs => [...logs, { from: "you", text: chatInput }])
     try {
       const res = await Interactions.send(awsConfig.lexBotName, chatInput)
+      console.log("Lex raw response:", res);
       setChatLogs(logs => [...logs, { from: "bot", text: res.message }])
     } catch (err) {
       console.error(err)
