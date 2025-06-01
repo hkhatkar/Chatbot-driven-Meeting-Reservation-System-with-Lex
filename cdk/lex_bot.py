@@ -288,4 +288,4 @@ def create_lex_bot(scope: Construct, lex_role: iam.Role, unified_lambda_arn: str
         # Export outputs for frontend configuration
     CfnOutput(scope, "REACT_APP_LEX_BOT_ID",       value=lex_bot.ref)
     CfnOutput(scope, "REACT_APP_LEX_BOT_ALIAS_ID", value=lex_alias.ref)
-    return lex_bot
+    return lex_bot, lex_alias

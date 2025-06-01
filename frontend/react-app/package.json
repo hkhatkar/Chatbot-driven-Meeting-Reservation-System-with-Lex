@@ -10,10 +10,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@aws-amplify/interactions": "^6.1.21",
-    "aws-amplify": "^6.14.4",
+    "@thefat32/aws-amplify-lex-provider-v2": "^1.0.3",
+    "aws-amplify": "^5.3.27",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "regenerator-runtime": "^0.14.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",

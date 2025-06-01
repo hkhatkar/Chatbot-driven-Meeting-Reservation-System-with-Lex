@@ -14,7 +14,8 @@ from aws_cdk import (
     Fn,
     custom_resources as cr,
     CfnOutput,
-    aws_s3_deployment as s3_deployment
+    aws_s3_deployment as s3_deployment,
+    aws_cognito as cognito
 )
 from .lex_bot import create_lex_bot
 from constructs import Construct
@@ -84,9 +85,19 @@ class AwsLexChatbotStack(Stack):
 
 
         # Define the Lex Bot with a single Lambda function for all intents
-        lex_bot = create_lex_bot(self, lex_role, unified_lambda_arn=unified_lambda.function_arn)
+        lex_bot, lex_alias = create_lex_bot(self, lex_role, unified_lambda_arn=unified_lambda.function_arn)
 
-
+        lex_role.add_to_policy(iam.PolicyStatement(
+            effect=iam.Effect.ALLOW,
+            actions=[
+                "lex:RecognizeText",
+                "lex:RecognizeUtterance"
+            ],
+            resources=[
+                # match your bot-alias ARN exactly
+                f"arn:aws:lex:{self.region}:{self.account}:bot-alias/{lex_bot.attr_id}*"
+            ]
+        ))
 
 
         unified_lambda.add_permission("LexInvokeLambda",
@@ -126,10 +137,11 @@ class AwsLexChatbotStack(Stack):
             )
         )
         # 3. Deploy the contents of your built React app to the S3 bucket
-        s3_deployment.BucketDeployment(self, "DeployFrontend",
-            sources=[s3_deployment.Source.asset("frontend/react-app/dist")],
-            destination_bucket=website_bucket
-        )
+        #s3_deployment.BucketDeployment(self, "DeployFrontend",
+        #    sources=[s3_deployment.Source.asset("frontend/react-app/dist")],
+        #    destination_bucket=website_bucket
+        #)
+
 
         # Lambda function to initialize the database
         init_lambda = _lambda.Function(self, "InitDatabaseLambda",
@@ -204,6 +216,74 @@ class AwsLexChatbotStack(Stack):
         CfnOutput(self, "REACT_APP_LEX_BOT_ARN", value=lex_bot.attr_arn)
         CfnOutput(self, "REACTAPPLEXBOTNAME", value=lex_bot.name)
         CfnOutput(self, "REACTAPPLEXBOTREGION", value=self.region)
+
+        # Identity Pool for unauthenticated (guest) users
+        identity_pool = cognito.CfnIdentityPool(self, "ChatbotIdentityPool",
+            allow_unauthenticated_identities=True
+        )
+
+        unauth_role = iam.Role(self, "UnauthRole",
+            assumed_by=iam.FederatedPrincipal(
+                "cognito-identity.amazonaws.com",
+                {
+                    "StringEquals": {
+                        "cognito-identity.amazonaws.com:aud": identity_pool.ref
+                    },
+                    "ForAnyValue:StringLike": {
+                        "cognito-identity.amazonaws.com:amr": "unauthenticated"
+                    }
+                },
+                "sts:AssumeRoleWithWebIdentity"
+            )
+        )
+
+        # Allow Lex access from unauthenticated users
+        unauth_role.add_to_policy(iam.PolicyStatement(
+            actions=[
+                "lex:RecognizeText",
+                "lex:RecognizeUtterance"
+            ],
+            resources=[
+                f"arn:aws:lex:{self.region}:{self.account}:bot-alias/{lex_bot.ref}*"
+            ]
+        ))
+
+        # Attach the unauth role to the identity pool
+        cognito.CfnIdentityPoolRoleAttachment(self, "IdentityPoolRoleAttachment",
+            identity_pool_id=identity_pool.ref,
+            roles={
+                "unauthenticated": unauth_role.role_arn
+            }
+        )
+
+        CfnOutput(self, "CognitoIdentityPoolId", value=identity_pool.ref)
+
+
+        # 3. Deploy the SPA build **and** a runtime config.json to S3
+        s3_deployment.BucketDeployment(self, "DeployFrontend",
+            sources=[
+                #React build output
+                s3_deployment.Source.asset("frontend/react-app/dist"),
+                #JSON file, generated on the fly from your stack’s data
+                s3_deployment.Source.json_data("config.json", {
+                    "bookingApiUrl":      booking_api.url,
+                    "availabilityApiUrl": availability_api.url,
+                    "lexBotArn":          lex_bot.attr_arn,
+                    "lexBotName":         lex_bot.name,
+                    "lexBotId":           lex_bot.ref,
+                    "lexBotAliasId":      lex_alias.ref,
+                    "lexBotRegion":       self.region,
+                    "lexBotLocaleId":     "en_US",
+                    "identityPoolId":     identity_pool.ref
+                })
+            ],
+            destination_bucket=website_bucket,
+            distribution=cloudfront_dist,
+            distribution_paths=["/*"]
+        )
+
+
+
 
 # Define the app and stack
 app = App()
