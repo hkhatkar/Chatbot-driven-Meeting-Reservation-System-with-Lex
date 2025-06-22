@@ -5,9 +5,8 @@ import './index.css'
 import App from './App.jsx'
 import { ConfigContext } from './ConfigContext';
 import { Amplify, Interactions } from 'aws-amplify'
-//import { Interactions } from '@aws-amplify/interactions'
 import AWSLex2Provider from '@thefat32/aws-amplify-lex-provider-v2'
-//import awsConfig from './aws-exports'
+
 
 Amplify.addPluggable(new AWSLex2Provider())
 

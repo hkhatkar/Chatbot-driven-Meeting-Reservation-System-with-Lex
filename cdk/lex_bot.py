@@ -25,7 +25,7 @@ def create_lex_bot(scope: Construct, lex_role: iam.Role, unified_lambda_arn: str
                         lex.CfnBot.SampleUtteranceProperty(utterance="Schedule a meeting for me"),
                         lex.CfnBot.SampleUtteranceProperty(utterance="Book a room for a meeting"),
                     ],
-                    slot_priorities=[  # Add slot priorities here
+                    slot_priorities=[  
                         lex.CfnBot.SlotPriorityProperty(
                             priority=1,
                             slot_name="MeetingDate"
@@ -155,7 +155,7 @@ def create_lex_bot(scope: Construct, lex_role: iam.Role, unified_lambda_arn: str
                         lex.CfnBot.SampleUtteranceProperty(utterance="Can I book a meeting at 2 PM?"),
                         lex.CfnBot.SampleUtteranceProperty(utterance="Check availability for a meeting tomorrow"),
                     ],
-                    slot_priorities=[  # Add slot priorities here
+                    slot_priorities=[ 
                         lex.CfnBot.SlotPriorityProperty(priority=1, slot_name="Room"),
                         lex.CfnBot.SlotPriorityProperty(priority=2, slot_name="CheckDate"),
                         lex.CfnBot.SlotPriorityProperty(priority=3, slot_name="CheckTime"),
@@ -257,19 +257,19 @@ def create_lex_bot(scope: Construct, lex_role: iam.Role, unified_lambda_arn: str
             lex.CfnBotVersion.BotVersionLocaleSpecificationProperty(
                 locale_id="en_US",
                 bot_version_locale_details=lex.CfnBotVersion.BotVersionLocaleDetailsProperty(
-                    source_bot_version="DRAFT"  # You clone from DRAFT
+                    source_bot_version="DRAFT"
                 )
             )
         ]
     )
 
-        # Create an explicit alias for Lex V2
+    # Create an explicit alias for Lex V2
     lex_alias = lex.CfnBotAlias(
         scope,
         "LexChatBotAlias",
-        bot_alias_name="Prod",            # or a custom alias name
-        bot_id=lex_bot.ref,            # reference the bot ID
-        bot_version=bot_version.attr_bot_version,                # use draft or a specific version
+        bot_alias_name="Prod",                           
+        bot_id=lex_bot.ref,          
+        bot_version=bot_version.attr_bot_version,              
         bot_alias_locale_settings=[
             lex.CfnBotAlias.BotAliasLocaleSettingsItemProperty(
                 locale_id="en_US",
@@ -285,7 +285,7 @@ def create_lex_bot(scope: Construct, lex_role: iam.Role, unified_lambda_arn: str
             )
         ]
     )
-        # Export outputs for frontend configuration
+    # Export outputs for frontend configuration
     CfnOutput(scope, "REACT_APP_LEX_BOT_ID",       value=lex_bot.ref)
     CfnOutput(scope, "REACT_APP_LEX_BOT_ALIAS_ID", value=lex_alias.ref)
     return lex_bot, lex_alias
