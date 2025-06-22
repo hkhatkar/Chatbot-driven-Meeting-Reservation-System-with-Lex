@@ -17,6 +17,7 @@ from aws_cdk import (
     aws_s3_deployment as s3_deployment,
     aws_cognito as cognito
 )
+
 from .lex_bot import create_lex_bot
 from constructs import Construct
 import os
@@ -74,17 +75,13 @@ class AwsLexChatbotStack(Stack):
         unified_lambda.grant_invoke(lex_role)
 
 
-
         # Grant Lambda function permissions to read/write DynamoDB tables
         bookings_table.grant_read_write_data(unified_lambda)
         rooms_table.grant_read_write_data(unified_lambda)
         staff_table.grant_read_write_data(unified_lambda)
 
 
-
-
-
-        # Define the Lex Bot with a single Lambda function for all intents
+        # Define the Lex Bot with a Lambda function for all intents
         lex_bot, lex_alias = create_lex_bot(self, lex_role, unified_lambda_arn=unified_lambda.function_arn)
 
         lex_role.add_to_policy(iam.PolicyStatement(
@@ -94,24 +91,17 @@ class AwsLexChatbotStack(Stack):
                 "lex:RecognizeUtterance"
             ],
             resources=[
-                # match your bot-alias ARN exactly
                 f"arn:aws:lex:{self.region}:{self.account}:bot-alias/{lex_bot.attr_id}*"
             ]
         ))
 
 
         unified_lambda.add_permission("LexInvokeLambda",
-            principal=iam.ServicePrincipal("lexv2.amazonaws.com"),  # Lex V2 service principal
+            principal=iam.ServicePrincipal("lexv2.amazonaws.com"),
             action="lambda:InvokeFunction",
-            #source_arn=lex_bot.attr_arn  # Ensure this is the correct Lex Bot ARN
             source_arn =f"arn:aws:lex:{self.region}:{self.account}:bot-alias/{lex_bot.attr_id}*"
 
-
-
-
-
         )
-
 
         # Attach permission to Lex Role for invoking the Lambda function
         lex_role.add_to_policy(iam.PolicyStatement(
@@ -121,7 +111,7 @@ class AwsLexChatbotStack(Stack):
 
 
         # S3 Bucket for frontend
-        # 1. Create the S3 bucket
+        # Create the S3 bucket
         website_bucket = s3.Bucket(self, "WebsiteBucket",
             website_index_document="index.html",
             website_error_document="error.html",
@@ -130,18 +120,12 @@ class AwsLexChatbotStack(Stack):
         )
 
         # CloudFront Distribution for the frontend
-        # 2. Create the CloudFront distribution pointing to the S3 bucket
+        # Create the CloudFront distribution pointing to the S3 bucket
         cloudfront_dist = cloudfront.Distribution(self, "ChatbotFrontendCDN",
             default_behavior=cloudfront.BehaviorOptions(
                 origin=origins.S3Origin(website_bucket)
             )
         )
-        # 3. Deploy the contents of your built React app to the S3 bucket
-        #s3_deployment.BucketDeployment(self, "DeployFrontend",
-        #    sources=[s3_deployment.Source.asset("frontend/react-app/dist")],
-        #    destination_bucket=website_bucket
-        #)
-
 
         # Lambda function to initialize the database
         init_lambda = _lambda.Function(self, "InitDatabaseLambda",
@@ -181,7 +165,12 @@ class AwsLexChatbotStack(Stack):
         # API Gateway for meeting bookings
         booking_api = apigateway.LambdaRestApi(self, "BookingAPI",
             handler=unified_lambda,
-            proxy=False
+            proxy=True,
+            default_cors_preflight_options=apigateway.CorsOptions(
+                allow_origins=apigateway.Cors.ALL_ORIGINS,
+                allow_methods=["GET","OPTIONS"],
+                allow_headers=["Content-Type"]
+            )
         )
 
         # For adding bookings via chatbot
@@ -192,6 +181,7 @@ class AwsLexChatbotStack(Stack):
         bookings_list = booking_api.root.add_resource("bookings")
         bookings_list.add_method("GET")  # uses unified_lambda by default
 
+
         # API Gateway for checking availability
         availability_api = apigateway.LambdaRestApi(self, "AvailabilityAPI",
             handler=unified_lambda,
@@ -201,16 +191,7 @@ class AwsLexChatbotStack(Stack):
         availability_resource = availability_api.root.add_resource("check-availability")
         availability_resource.add_method("GET")
 
-        # Output API Gateway URLs
-      #  CfnOutput(self, "BookingAPIGatewayURL", value=booking_api.url)
-      #  CfnOutput(self, "AvailabilityAPIGatewayURL", value=availability_api.url)
-
-        # Output Lex Bot ARN
-      #  CfnOutput(self, "LexBotARN", value=lex_bot.attr_arn)
-
         CfnOutput(self, "WebsiteURL", value=f"https://{cloudfront_dist.domain_name}")
-
-
         CfnOutput(self, "REACT_APP_BOOKING_API", value=booking_api.url)
         CfnOutput(self, "REACT_APP_AVAILABILITY_API", value=availability_api.url)
         CfnOutput(self, "REACT_APP_LEX_BOT_ARN", value=lex_bot.attr_arn)
@@ -259,7 +240,7 @@ class AwsLexChatbotStack(Stack):
         CfnOutput(self, "CognitoIdentityPoolId", value=identity_pool.ref)
 
 
-        # 3. Deploy the SPA build **and** a runtime config.json to S3
+        # Deploy the SPA build and a runtime config.json to S3
         s3_deployment.BucketDeployment(self, "DeployFrontend",
             sources=[
                 #React build output

@@ -102,19 +102,33 @@ def fallback_response():
 
 
 def lambda_handler(event, context):
+    # ─── Detect REST‐API HTTP events ─────────────────────────
+    method = event.get("httpMethod", "")
+    path   = event.get("path", "")
 
-    #Scans for bookings list
-    # if called via API Gateway GET /bookings
-    if event.get("requestContext", {}).get("http", {}).get("method") == "GET" \
-       and event["rawPath"].endswith("/bookings"):
+    # ─── CORS preflight for /bookings ────────────────────────
+    if method == "OPTIONS" and path.endswith("/bookings"):
+        return {
+            "statusCode": 200,
+            "headers": {
+                "Access-Control-Allow-Origin":  "*",
+                "Access-Control-Allow-Methods": "GET,OPTIONS",
+                "Access-Control-Allow-Headers": "Content-Type"
+            },
+            "body": ""
+        }
+
+    # ─── GET /bookings ───────────────────────────────────────
+    if method == "GET" and path.endswith("/bookings"):
         items = bookings_table.scan()["Items"]
         return {
             "statusCode": 200,
-            "headers": {"Access-Control-Allow-Origin": "*"},
+            "headers": {
+                "Access-Control-Allow-Origin": "*"
+            },
             "body": json.dumps(items)
         }
-
-    # Intents from chatbot
+    # ─── Lex chatbot logic ─────────────────────
     intent = event["sessionState"]["intent"]["name"]
     slots  = event["sessionState"]["intent"]["slots"]
     try:
